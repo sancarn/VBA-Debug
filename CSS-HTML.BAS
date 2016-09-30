@@ -4,7 +4,14 @@ Public Type CSS_Style
 End Type
 
 Function cssToString(css As CSS_Style) As String
-    cssToString = "." & css.sName & " {" & css.sStyle & "}"
+    'Css to string without vbCrLf
+    'cssToString = "." & css.sName & " {" & css.sStyle & "}"
+    
+    Dim cssSubParts As String: cssSubParts = Replace(css.sStyle, ";", ";" & vbCrLf)
+    cssSubParts = Left(cssSubParts, Len(cssSubParts) - Len(vbCrLf))
+    cssToString = "." & css.sName & "{" & vbCrLf & _
+        sTabs(cssSubParts, 1) & vbCrLf & _
+    "}"
 End Function
 
 Sub removeCSS(css As CSS_Style, ByVal sName As String)
@@ -75,8 +82,12 @@ Sub test()
     
 End Sub
 
-Function wrapInHTMLTag(ByVal toWrap As String, tag As String)
-    wrapInHTMLTag = "<" & tag & ">" & vbCrLf & sTabs(toWrap, 1) & vbCrLf & "</" & tag & ">"
+Function wrapInHTMLTag(ByVal toWrap As String, tag As String, Optional tagParams As String = "")
+    'seperate tagParams from tag if exists
+    If tagParams <> "" Then tagParams = " " & tagParams
+    
+    'return wrapped XML
+    wrapInHTMLTag = "<" & tag & tagParams & ">" & vbCrLf & sTabs(toWrap, 1) & vbCrLf & "</" & tag & ">"
 End Function
 
 Function sTabs(ByVal toTab As String, ByVal numTabs As Integer) As String
@@ -84,20 +95,37 @@ Function sTabs(ByVal toTab As String, ByVal numTabs As Integer) As String
     sTabs = tabStr & Replace(toTab, vbCrLf, vbCrLf & tabStr)
 End Function
 
-Function sHtmlStyles(col As Collection) As String
+Function sHTMLHeader(sTitle As String, sStyles As String, Optional miscTags As String = "")
+    'create title and add (create?) styles
+    Dim sInnerHTML As String
+    sInnerHTML = wrapInHTMLTag(sTitle, "title") & vbCrLf & sStyles
+    
+    'If miscTags provided, add them to the inner html
+    If miscTags <> "" Then sInnerHTML = sInnerHTML & vbCrLf & miscTags
+    
+    'return inner html wrapped in header tags
+    sHTMLHeader = wrapInHTMLTag(sInnerHTML, "header")
+End Function
+
+Function sHtmlStyles(col() As CSS_Style) As String
     'Concatenate all CSS into one long string
     Dim ret As String, css As CSS_Style
-    For Each css In col
+    'For Each css In col
+    '    ret = ret & cssToString(css) & vbCrLf
+    'Next css
+    
+    For i = LBound(col) To UBound(col)
+        css = col(i)
         ret = ret & cssToString(css) & vbCrLf
-    Next css
+    Next
     
     'remove trailing vbCrLf
     ret = Left(ret, Len(ret) - Len(vbCrLf))
     
-    sHtmlStyles = wrapInHTMLTag(wrapInHTMLTag(ret, "style"), "header")
+    sHtmlStyles = wrapInHTMLTag(ret, "style")
 End Function
 
-Sub createCSSStyles()
+Sub testCSSStyles()
     Dim sErrors As CSS_Style
     Dim sWarnings As CSS_Style
     Dim sBasic As CSS_Style
@@ -111,13 +139,45 @@ Sub createCSSStyles()
     addCSS sWarnings, "color", "#000000"
     
     sBasic = newCSSDefault("Basic")
-    addCSS sBasic, "color", "#eeeeee"
+    addCSS sBasic, "color", "#bbbbbb"
     
-    Dim CSSStyles As New Collection
-    CSSStyles.Add sErrors, "Errors"
-    CSSStyles.Add sWarnings, "Warnings"
-    CSSStyles.Add sBasic, "Basic"
+    Dim CSSStyles(1 To 3) As CSS_Style
+    CSSStyles(1) = sErrors
+    CSSStyles(2) = sWarnings
+    CSSStyles(3) = sBasic
     
-    Debug.Print sHtmlStyles(CSSStyles)
+    Dim sInnerBody As String
     
+    'Demonstrating errors
+    On Error GoTo ErrorOccurred
+    Dim j, k As Integer: j = 0: k = 10 / j
+    GoTo FinishError
+ErrorOccurred:
+    On Error GoTo 0
+    appendInnerHTML sInnerBody, "Error: 10/" & j & " cannot be evaluated", sErrors
+FinishError:
+
+    'Demonstrate warnings
+    If Cells(1, 1) = "" Then
+        appendInnerHTML sInnerBody, "Warning: Blank cell detected in A1 - This could cause issues", sWarnings
+    End If
+    
+    'Demonstrate basic
+    appendInnerHTML sInnerBody, "Doing stuff", sBasic
+    appendInnerHTML sInnerBody, "Doing more stuff", sBasic
+    appendInnerHTML sInnerBody, "Doing other stuff", sBasic
+    appendInnerHTML sInnerBody, "Finishing stuff", sBasic
+    
+    
+    Dim sInnerHTML As String
+    
+    sInnerHTML = sHTMLHeader("Error Log", sHtmlStyles(CSSStyles)) & _
+            vbCrLf & wrapInHTMLTag(sInnerBody, "body")
+    
+    Debug.Print wrapInHTMLTag(sInnerHTML, "html")
+End Sub
+
+Sub appendInnerHTML(sInnerBody As String, ByVal sText As String, css As CSS_Style)
+    Dim sep As String: If sInnerBody <> "" Then sep = vbCrLf
+    sInnerBody = sInnerBody & sep & wrapInHTMLTag(sText, "div", "class=" & css.sName)
 End Sub
